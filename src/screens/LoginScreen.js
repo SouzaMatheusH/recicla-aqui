@@ -30,7 +30,7 @@ const LoginScreen = ({ navigation }) => {
         {/* Botão de Entrar */}
         <TouchableOpacity
           style={[styles.button, styles.loginButton]}
-          onPress={() => { /* Lógica de login aqui */ }}
+          onPress={() => { navigation.navigate('Main') }}
         >
           <Text style={[styles.buttonText, styles.loginButtonText]}>Entrar</Text>
         </TouchableOpacity>

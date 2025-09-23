@@ -46,7 +46,7 @@ const AddressScreen = ({ navigation }) => {
       <View style={styles.buttonContainer}>
         <TouchableOpacity
           style={styles.finishButton}
-          onPress={() => { /* Lógica de conclusão do cadastro aqui */ }}
+          onPress={() => { navigation.navigate('Main') }}
         >
           <Text style={styles.finishButtonText}>Concluir</Text>
         </TouchableOpacity>

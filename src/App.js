@@ -7,6 +7,7 @@ import HomeScreen from './screens/HomeScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import Address from './screens/AddressScreen';
+import MainScreen from './screens/MainScreen';
 
 const Stack = createStackNavigator();
 
@@ -33,6 +34,11 @@ const App = () => {
           name="Address"
           component={Address}
           options={{ title: 'Endereço' }}
+        />
+        <Stack.Screen // Adicione esta linha
+          name="Main"
+          component={MainScreen}
+          options={{ title: 'ReciclAqui' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

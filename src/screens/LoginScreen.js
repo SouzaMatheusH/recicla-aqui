@@ -1,15 +1,73 @@
-import React from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TextInput, 
+  TouchableOpacity, 
+  Alert,
+  ActivityIndicator // Adicionado para indicar carregamento
+} from 'react-native';
+// Importações do Firebase Authentication
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../firebaseConfig'; // Importa o objeto de autenticação
 
 const LoginScreen = ({ navigation }) => {
+  // Estados para capturar os inputs
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false); // Estado para controle de carregamento
+
+  // Função para lidar com o login
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert("Atenção", "Preencha e-mail e senha para continuar.");
+      return;
+    }
+    
+    setLoading(true);
+
+    try {
+      // Tenta fazer o login no Firebase
+      await signInWithEmailAndPassword(auth, email, password);
+      
+      // Sucesso: Redireciona para a tela principal
+      // Usamos 'replace' para que o usuário não volte para a tela de login ao apertar Voltar
+      navigation.replace('Main'); 
+
+    } catch (error) {
+      // Falha: Trata e exibe o erro do Firebase
+      let errorMessage = "Erro desconhecido. Tente novamente.";
+      if (error.code === 'auth/invalid-email') {
+        errorMessage = "E-mail inválido.";
+      } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        errorMessage = "E-mail ou senha incorretos.";
+      }
+      
+      Alert.alert("Erro no Login", errorMessage);
+
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
+      {/* Container para o texto "Logo" (Se a logo estiver aqui, ajuste o layout) */}
+      <View style={styles.logoContainer}>
+        <Text style={styles.logoText}>Logo</Text>
+      </View>
+
+      {/* Container para os campos de entrada */}
       <View style={styles.inputContainer}>
         <Text style={styles.inputLabel}>Email</Text>
         <TextInput
           style={styles.input}
           placeholder="Seu e-mail"
           keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail} // Captura o valor
+          autoCapitalize="none"
         />
 
         <Text style={styles.inputLabel}>Senha</Text>
@@ -17,6 +75,8 @@ const LoginScreen = ({ navigation }) => {
           style={styles.input}
           placeholder="Sua senha"
           secureTextEntry
+          value={password}
+          onChangeText={setPassword} // Captura o valor
         />
         
         {/* Link para esqueci a senha */}
@@ -30,15 +90,21 @@ const LoginScreen = ({ navigation }) => {
         {/* Botão de Entrar */}
         <TouchableOpacity
           style={[styles.button, styles.loginButton]}
-          onPress={() => { navigation.navigate('Main') }}
+          onPress={handleLogin} // Chama a função de login
+          disabled={loading} // Desabilita o botão durante o carregamento
         >
-          <Text style={[styles.buttonText, styles.loginButtonText]}>Entrar</Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={[styles.buttonText, styles.loginButtonText]}>Entrar</Text>
+          )}
         </TouchableOpacity>
 
         {/* Botão de Sign up */}
         <TouchableOpacity
           style={[styles.button, styles.signupButton]}
           onPress={() => navigation.navigate('Register')}
+          disabled={loading}
         >
           <Text style={[styles.buttonText, styles.signupButtonText]}>Criar Conta</Text>
         </TouchableOpacity>
@@ -47,6 +113,7 @@ const LoginScreen = ({ navigation }) => {
   );
 };
 
+// Estilos
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -67,7 +134,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     width: '100%',
     marginBottom: 20,
-    marginTop: 50, // Ajuste para posicionar abaixo da logo
+    marginTop: 50,
   },
   inputLabel: {
     fontSize: 16,
@@ -83,7 +150,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   forgotPassword: {
-    color: '#007AFF', // Cor azul padrão para links
+    color: '#007AFF',
     textAlign: 'left',
     fontSize: 14,
     marginBottom: 20,
@@ -98,6 +165,7 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center', // Para centralizar o ActivityIndicator
     borderWidth: 1,
     borderColor: '#1E1E1E',
   },

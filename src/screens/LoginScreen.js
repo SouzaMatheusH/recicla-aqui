@@ -6,8 +6,13 @@ import {
   TextInput, 
   TouchableOpacity, 
   Alert,
-  ActivityIndicator // Adicionado para indicar carregamento
+  ActivityIndicator, 
+  Image // Adicionado 'Image'
 } from 'react-native';
+
+// Importações da imagem
+import logoImage from '../assets/logo.png'; // Importado o arquivo da imagem
+
 // Importações do Firebase Authentication
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebaseConfig'; // Importa o objeto de autenticação
@@ -32,7 +37,6 @@ const LoginScreen = ({ navigation }) => {
       await signInWithEmailAndPassword(auth, email, password);
       
       // Sucesso: Redireciona para a tela principal
-      // Usamos 'replace' para que o usuário não volte para a tela de login ao apertar Voltar
       navigation.replace('Main'); 
 
     } catch (error) {
@@ -53,9 +57,13 @@ const LoginScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Container para o texto "Logo" (Se a logo estiver aqui, ajuste o layout) */}
+      {/* Container para a Imagem do Logo - Ajustado para ser centralizado */}
       <View style={styles.logoContainer}>
-        <Text style={styles.logoText}>Logo</Text>
+        <Image 
+          source={logoImage} 
+          style={styles.logoImage} 
+          resizeMode="contain"
+        />
       </View>
 
       {/* Container para os campos de entrada */}
@@ -122,19 +130,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     paddingHorizontal: 20,
   },
+  // ESTILOS AJUSTADOS PARA CENTRALIZAR A IMAGEM
   logoContainer: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
+    width: '100%', // Garante que o container ocupe toda a largura
+    alignItems: 'center', // Centraliza o conteúdo horizontalmente
+    marginBottom: 50, // Espaço após o logo
+    // Removidas as propriedades 'position', 'top' e 'left'
   },
-  logoText: {
-    fontSize: 32,
-    fontWeight: 'bold',
+  logoImage: {
+    width: 200, // Ajuste a largura conforme sua preferência
+    height: 80, // Ajuste a altura conforme sua preferência
   },
+  // FIM DOS ESTILOS AJUSTADOS
   inputContainer: {
     width: '100%',
     marginBottom: 20,
-    marginTop: 50,
+    // Removido o 'marginTop' que compensava o logo em posição absoluta
   },
   inputLabel: {
     fontSize: 16,
@@ -165,7 +176,7 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderRadius: 8,
     alignItems: 'center',
-    justifyContent: 'center', // Para centralizar o ActivityIndicator
+    justifyContent: 'center', 
     borderWidth: 1,
     borderColor: '#1E1E1E',
   },

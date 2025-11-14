@@ -1,9 +1,13 @@
 // src/firebaseConfig.js
 
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-// 🚨 CORREÇÃO ESSENCIAL: Importa o método para inicializar o Firestore
+// 🚨 CORREÇÃO: Importa initializeAuth e getReactNativePersistence
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth'; 
 import { getFirestore } from 'firebase/firestore'; 
+
+// 🚨 NOVO: Importa o AsyncStorage para persistência no React Native
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage'; 
+
 
 // Suas chaves de configuração do projeto Firebase
 const firebaseConfig = {
@@ -19,8 +23,11 @@ const firebaseConfig = {
 // Inicializa o Firebase
 const app = initializeApp(firebaseConfig);
 
-// Inicializa e exporta o serviço de autenticação
-export const auth = getAuth(app);
+// Inicializa e exporta o serviço de autenticação com persistência
+// 🚨 CORREÇÃO: Usando initializeAuth para definir o método de persistência
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(ReactNativeAsyncStorage)
+});
 
 // Inicializa e exporta o serviço do Firestore (db)
 export const db = getFirestore(app);

@@ -1,12 +1,20 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native'; // 1. Adicionado 'Image'
+
+// 2. Importe o arquivo da sua imagem
+import logoImage from '../assets/logo.png';
 
 const HomeScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
-      {/* Container para o texto "Logo" */}
+      {/* Container para a Imagem do Logo */}
       <View style={styles.logoContainer}>
-        <Text style={styles.logoText}>Logo</Text>
+        {/* 3. Substituído o componente <Text> pelo <Image> */}
+        <Image
+          source={logoImage}
+          style={styles.logoImage} // Usando novo estilo para a imagem
+          resizeMode="contain"
+        />
       </View>
 
       {/* Container para os botões */}
@@ -31,6 +39,8 @@ const HomeScreen = ({ navigation }) => {
   );
 };
 
+// ---
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -40,10 +50,12 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     marginBottom: 50,
+    // Note que não precisamos mais de `logoText`
   },
-  logoText: {
-    fontSize: 48,
-    fontWeight: 'bold',
+  // Novo estilo para definir as dimensões da imagem
+  logoImage: {
+    width: 250, // Defina a largura
+    height: 100, // Defina a altura
   },
   buttonContainer: {
     width: '80%',

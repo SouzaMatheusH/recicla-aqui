@@ -15,21 +15,16 @@ import MapView, { Marker, Polyline } from 'react-native-maps';
 import * as Location from 'expo-location'; 
 
 // Importações do Firebase
-import { db } from '../firebaseConfig'; 
-import { collection, onSnapshot } from 'firebase/firestore'; 
+import { db, auth } from '../firebaseConfig'; // Importado auth para checar o usuário
+import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore'; 
 
-// ⚠️ AQUI ESTÁ O SEGREDO ⚠️
-// Você deve substituir este placeholder pela sua CHAVE DE API REAL do Google Maps
-// com as APIs 'Directions' e 'Maps JavaScript' ativadas e cobrança configurada.
-const GOOGLE_MAPS_API_KEY = "AIzaSyDJhg6HK-fVaB1v_QJa27jQvWgjSAqJ8Og";
+// ⚠️ CHAVE DE API PARA GEOCODIFICAÇÃO E ROTAS
+// Substitua o placeholder pela sua CHAVE DE API REAL do Google Maps.
+const GOOGLE_MAPS_API_KEY = "AIzaSyDJhg6HK-fVaB1v_QJa27jQvWgjSAqJ8Og"; 
 
-// Função utilitária para decodificar a polilinha (Necessária para a API do Google)
-const decodePolyline = (t) => {
-    let index = 0,
-        lat = 0,
-        lng = 0,
-        coordinates = [];
-
+// Função utilitária para decodificar a polilinha 
+const decodePolyline = (t) => { 
+    let index = 0, lat = 0, lng = 0, coordinates = [];
     while (index < t.length) {
         let b, shift = 0, result = 0;
         do {
@@ -39,7 +34,6 @@ const decodePolyline = (t) => {
         } while (b >= 0x20);
         let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
         lat += dlat;
-
         shift = 0;
         result = 0;
         do {
@@ -49,24 +43,36 @@ const decodePolyline = (t) => {
         } while (b >= 0x20);
         let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
         lng += dlng;
-
         coordinates.push({ latitude: (lat / 1e5), longitude: (lng / 1e5) });
     }
     return coordinates;
 };
 
 
-const MainScreen = () => {
+const MainScreen = ({ navigation }) => {
   const [initialRegion, setInitialRegion] = useState(null); 
   const [loading, setLoading] = useState(true);
   const [points, setPoints] = useState([]); 
   const [userLocation, setUserLocation] = useState(null); 
   const [selectedPoint, setSelectedPoint] = useState(null); 
-  // Alterado para array vazio para melhor manipulação
   const [routeCoordinates, setRouteCoordinates] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false); // NOVO ESTADO ADMIN
 
 
-  // --- FUNÇÕES DE LÓGICA DE MAPA E DADOS (Mantidas as mesmas) ---
+  // --- FUNÇÕES DE ADMIN E LÓGICA DE MAPA ---
+
+  // NOVO: Checa se o usuário logado é administrador
+  const checkAdminStatus = async (user) => {
+    if (!user) return false;
+    try {
+        const userDocRef = doc(db, "users", user.uid);
+        const userDoc = await getDoc(userDocRef);
+        return userDoc.exists() && userDoc.data().isAdmin === true;
+    } catch (error) {
+        console.error("Erro ao checar status de admin:", error);
+        return false;
+    }
+  };
 
   const calculatePointsCenter = (pointsArray) => {
     if (pointsArray.length === 0) {
@@ -86,10 +92,7 @@ const MainScreen = () => {
       
       if (status === 'granted') {
         let location = await Location.getCurrentPositionAsync({});
-        locationCoords = { 
-            latitude: location.coords.latitude, 
-            longitude: location.coords.longitude 
-        };
+        locationCoords = { latitude: location.coords.latitude, longitude: location.coords.longitude };
         region.latitude = locationCoords.latitude;
         region.longitude = locationCoords.longitude;
       } else {
@@ -111,10 +114,7 @@ const MainScreen = () => {
       snapshot.forEach((doc) => {
         const data = doc.data();
         if (typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-            fetchedPoints.push({
-                id: doc.id,
-                ...data,
-            });
+            fetchedPoints.push({ id: doc.id, ...data });
         }
       });
       
@@ -146,86 +146,74 @@ const MainScreen = () => {
 
   useEffect(() => {
     const initializeMapAndPoints = async () => {
+        const user = auth.currentUser;
+        if (user) {
+            const admin = await checkAdminStatus(user);
+            setIsAdmin(admin); // Define o status de admin
+        }
+
         const userRegion = await getLocationRegion();
-        const unsubscribe = fetchPoints(userRegion);
+        // A busca dos pontos e definição final da região ocorre em fetchPoints
+        const unsubscribe = fetchPoints(userRegion); 
         return unsubscribe;
     };
     
-    const unsubscribe = initializeMapAndPoints();
-    
+    const cleanup = initializeMapAndPoints();
     return () => {
-        if (unsubscribe) unsubscribe.then(u => u()).catch(() => {});
+        if (cleanup) cleanup.then(u => u()).catch(() => {});
     };
   }, []); 
 
-  // --- FUNÇÃO DE INTERAÇÃO (Traçar Rota) ---
 
-  // NOVO: Função para obter a rota real via API do Google
+  // --- FUNÇÕES DE ROTA E NAVEGAÇÃO ---
+
   const getRoute = async (origin, destination) => {
-    // ⚠️ ALERTA: Verifica se o placeholder foi substituído
-    if (GOOGLE_MAPS_API_KEY === "YOUR_GOOGLE_MAPS_API_KEY_HERE") {
-        Alert.alert("Erro de API", "Por favor, substitua 'YOUR_GOOGLE_MAPS_API_KEY_HERE' pela sua chave real do Google Maps para que a rota funcione.");
+    if (GOOGLE_MAPS_API_KEY === "SUA_CHAVE_DE_API_REAL_AQUI") {
+        Alert.alert("Erro de API", "Substitua a chave de API para traçar a rota.");
         return null;
     }
 
     const originStr = `${origin.latitude},${origin.longitude}`;
     const destinationStr = `${destination.latitude},${destination.longitude}`;
 
-    // Constrói a URL da API de Rotas do Google
     const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${originStr}&destination=${destinationStr}&key=${GOOGLE_MAPS_API_KEY}`;
     
     try {
         const response = await fetch(url);
         const json = await response.json();
         
-        // Log de depuração crucial
-        console.log("Resposta da API de Rotas (Status):", json.status);
-        
         if (json.status === "OK" && json.routes && json.routes.length > 0) {
-            // A polilinha é retornada codificada. Usamos a função auxiliar para decodificar.
             const encodedPolyline = json.routes[0].overview_polyline.points;
             return decodePolyline(encodedPolyline);
-        } else if (json.status === "ZERO_RESULTS" || json.status === "NOT_FOUND") {
-            Alert.alert("Rota Não Encontrada", "Não foi possível traçar uma rota de direção entre os dois pontos.");
-            return null;
-        } else if (json.status === "REQUEST_DENIED" || json.status === "INVALID_REQUEST") {
-            // Este é o erro mais comum relacionado à chave de API ou APIs não habilitadas
-            Alert.alert("Erro de API", `A requisição foi negada. Verifique se sua CHAVE de API é válida e se a 'Directions API' está ativada.`);
-            console.error("Erro detalhado da API:", json.error_message);
+        } else if (json.status === "REQUEST_DENIED") {
+            Alert.alert("Erro de API", `A requisição foi negada. Verifique suas permissões no Google Cloud.`);
             return null;
         } else {
-             Alert.alert("Erro Desconhecido", "Ocorreu um erro ao processar a rota. Verifique o console para mais detalhes.");
+             Alert.alert("Rota Não Encontrada", "Não foi possível traçar uma rota de direção entre os dois pontos.");
              return null;
         }
 
     } catch (error) {
-        console.error("Erro ao buscar rota da API (Network ou CORS):", error);
-        Alert.alert("Erro de Rede", "Falha na conexão ao buscar a rota. Verifique sua chave de API e conexão.");
+        console.error("Erro ao buscar rota:", error);
         return null;
     }
   };
 
-  // NOVO: Função para selecionar o ponto e TRAÇAR a rota REAL no mapa
   const handleSelectPoint = async (point) => {
     if (!userLocation) {
-        Alert.alert(
-            "Localização Necessária", 
-            "Não foi possível obter sua localização atual. Conceda as permissões para traçar rotas."
-        );
+        Alert.alert("Localização Necessária", "Conceda as permissões para traçar rotas.");
         return;
     }
     
-    // 1. Limpa a rota anterior e define o ponto selecionado
     setRouteCoordinates([]);
     setSelectedPoint(point);
     
-    // 2. Busca a rota real (async)
     const routeCoords = await getRoute(userLocation, point);
     
     if (routeCoords && routeCoords.length > 0) {
         setRouteCoordinates(routeCoords);
         
-        // 3. Ajusta o zoom do mapa para a rota
+        // Ajusta o zoom do mapa para a rota
         const latitudes = routeCoords.map(coord => coord.latitude);
         const longitudes = routeCoords.map(coord => coord.longitude);
 
@@ -241,9 +229,8 @@ const MainScreen = () => {
             longitudeDelta: (maxLon - minLon) * 1.5,
         });
     } else {
-        // Fallback: Se a rota falhou, centraliza entre origem e destino
-        setRouteCoordinates([]); // Garante que a linha reta de fallback não é desenhada
-        
+        setRouteCoordinates([]);
+        // Fallback: centraliza entre origem e destino
         setInitialRegion({
             latitude: (userLocation.latitude + point.latitude) / 2,
             longitude: (userLocation.longitude + point.longitude) / 2,
@@ -254,14 +241,12 @@ const MainScreen = () => {
   };
 
 
-  // Função chamada para iniciar a navegação (abre app externo)
   const handleStartNavigation = () => {
     if (!selectedPoint || !userLocation) {
         Alert.alert("Erro", "Selecione um ponto e garanta que sua localização está disponível.");
         return;
     }
     
-    // URL do Google Maps com a origem e o destino para navegação real
     const destinationLat = selectedPoint.latitude;
     const destinationLon = selectedPoint.longitude;
     const originLat = userLocation.latitude;
@@ -273,6 +258,14 @@ const MainScreen = () => {
       console.error("Erro ao tentar abrir o Google Maps:", err);
       Alert.alert("Erro", "Não foi possível abrir o aplicativo de mapas.");
     });
+  };
+
+  const handleIndicarPonto = () => {
+    navigation.navigate('IndicarPonto');
+  };
+
+  const handleAdmin = () => {
+    navigation.navigate('Admin');
   };
 
 
@@ -314,8 +307,6 @@ const MainScreen = () => {
                 <Text style={styles.startNavigationButtonText}>Iniciar Navegação no Maps</Text>
             </TouchableOpacity>
         )}
-
-        {/* REMOVIDO: A seção que exibia o texto "Toque para Traçar Rota" nos cards não selecionados */}
       </View>
     </TouchableOpacity>
   );
@@ -363,6 +354,21 @@ const MainScreen = () => {
       {/* 2. LISTA DE LOCALIZAÇÕES (2/3 da tela) */}
       <View style={styles.listContainer}>
         <Text style={styles.listTitle}>Pontos de Coleta Próximos ({points.length} encontrados)</Text>
+        
+        <View style={styles.buttonRow}>
+            {/* BOTÃO ADMIN (Só aparece se isAdmin for true) */}
+            {isAdmin && (
+                <TouchableOpacity style={styles.adminButton} onPress={handleAdmin}>
+                    <Text style={styles.adminButtonText}>Fila de Moderação</Text>
+                </TouchableOpacity>
+            )}
+
+            {/* BOTÃO INDICAR PONTO (Aparece para todos) */}
+            <TouchableOpacity style={styles.indicateButton} onPress={handleIndicarPonto}>
+                <Text style={styles.indicateButtonText}>Indique um Ponto de Coleta</Text>
+            </TouchableOpacity>
+        </View>
+        
         {
             !userLocation && (
                 <View style={styles.warningBox}>
@@ -440,8 +446,41 @@ const styles = StyleSheet.create({
   listTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 5, 
     color: '#1E1E1E',
+  },
+  
+  // ESTILOS PARA LINHA DE BOTÕES
+  buttonRow: {
+    flexDirection: 'row',
+    marginBottom: 15,
+    marginTop: 5,
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  adminButton: {
+    flex: 1,
+    backgroundColor: '#F7C300', // Amarelo para admin/moderação
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  adminButtonText: {
+    color: '#1E1E1E',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  indicateButton: {
+    flex: 1,
+    backgroundColor: '#1E1E1E', 
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  indicateButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   warningBox: {
       backgroundColor: '#FFFBEA', 
@@ -494,26 +533,13 @@ const styles = StyleSheet.create({
     color: '#333',
     marginTop: 5,
   },
-  // Estilo para o botão que APENAS informa que a rota será traçada no mapa
-  directionsButton: {
-      marginTop: 10,
-      paddingVertical: 8,
-      paddingHorizontal: 15,
-      alignSelf: 'flex-start',
-  },
-  directionsButtonText: {
-      color: '#666',
-      fontSize: 14,
-      fontStyle: 'italic',
-  },
-  // Novo estilo para o botão que INICIA a navegação no app externo
   startNavigationButton: {
       marginTop: 10,
-      backgroundColor: '#007AFF', // Azul
+      backgroundColor: '#007AFF', 
       paddingVertical: 10,
       paddingHorizontal: 15,
       borderRadius: 5,
-      alignSelf: 'stretch', // Ocupa a largura total do card
+      alignSelf: 'stretch', 
       alignItems: 'center',
   },
   startNavigationButtonText: {

@@ -7,15 +7,15 @@ import {
   TouchableOpacity, 
   Alert,
   ActivityIndicator, 
-  Image // Adicionado 'Image'
+  Image 
 } from 'react-native';
 
 // Importações da imagem
-import logoImage from '../assets/logo.png'; // Importado o arquivo da imagem
+import logoImage from '../assets/logo.png'; 
 
 // Importações do Firebase Authentication
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebaseConfig'; // Importa o objeto de autenticação
+import { auth } from '../firebaseConfig'; 
 
 const LoginScreen = ({ navigation }) => {
   // Estados para capturar os inputs
@@ -125,27 +125,27 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
+    // Alterado para flex-start para mover o conteúdo para cima
+    justifyContent: 'flex-start', 
     alignItems: 'center',
     backgroundColor: '#fff',
     paddingHorizontal: 20,
+    paddingTop: 80, // Adiciona padding no topo para começar mais acima, mas com margem
   },
-  // ESTILOS AJUSTADOS PARA CENTRALIZAR A IMAGEM
+  // ESTILOS AJUSTADOS PARA CENTRALIZAR E AUMENTAR A IMAGEM
   logoContainer: {
-    width: '100%', // Garante que o container ocupe toda a largura
-    alignItems: 'center', // Centraliza o conteúdo horizontalmente
-    marginBottom: 50, // Espaço após o logo
-    // Removidas as propriedades 'position', 'top' e 'left'
+    width: '100%', 
+    alignItems: 'center',
+    marginBottom: 0, // Reduzido o espaço para empurrar o conteúdo para cima
   },
   logoImage: {
-    width: 200, // Ajuste a largura conforme sua preferência
-    height: 80, // Ajuste a altura conforme sua preferência
+    width: 640, // MAIS AUMENTADO (ex: de 250 para 320)
+    height: 240, // MAIS AUMENTADO (ex: de 100 para 120)
   },
   // FIM DOS ESTILOS AJUSTADOS
   inputContainer: {
     width: '100%',
     marginBottom: 20,
-    // Removido o 'marginTop' que compensava o logo em posição absoluta
   },
   inputLabel: {
     fontSize: 16,

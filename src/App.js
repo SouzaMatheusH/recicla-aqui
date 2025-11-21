@@ -8,6 +8,8 @@ import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import Address from './screens/AddressScreen';
 import MainScreen from './screens/MainScreen';
+import AddPointScreen from './screens/AddPointScreen';
+import AdminScreen from './screens/AdminScreen'; // NOVO IMPORT
 
 const Stack = createStackNavigator();
 
@@ -35,10 +37,20 @@ const App = () => {
           component={Address}
           options={{ title: 'Endereço' }}
         />
-        <Stack.Screen // Adicione esta linha
+        <Stack.Screen
           name="Main"
           component={MainScreen}
           options={{ title: 'ReciclAqui' }}
+        />
+        <Stack.Screen
+          name="IndicarPonto" 
+          component={AddPointScreen}
+          options={{ title: 'Indicar Ponto de Coleta' }}
+        />
+        <Stack.Screen // NOVA ROTA
+          name="Admin" 
+          component={AdminScreen}
+          options={{ title: 'Moderação de Pontos' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

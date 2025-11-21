@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native'; // 1. Adicionado 'Image'
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native'; 
 
 // 2. Importe o arquivo da sua imagem
 import logoImage from '../assets/logo.png';
@@ -52,10 +52,10 @@ const styles = StyleSheet.create({
     marginBottom: 50,
     // Note que não precisamos mais de `logoText`
   },
-  // Novo estilo para definir as dimensões da imagem
+  // Novo estilo para definir as dimensões da imagem (AUMENTADO)
   logoImage: {
-    width: 250, // Defina a largura
-    height: 100, // Defina a altura
+    width: 640, // AUMENTADO de 250
+    height: 240, // AUMENTADO de 100
   },
   buttonContainer: {
     width: '80%',

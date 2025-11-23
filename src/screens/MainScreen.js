@@ -13,16 +13,15 @@ import {
 // Importações Essenciais para o Mapa e Localização
 import MapView, { Marker, Polyline } from 'react-native-maps'; 
 import * as Location from 'expo-location'; 
+import Constants from 'expo-constants'; // Importa Constants
 
 // Importações do Firebase
-import { db, auth } from '../firebaseConfig'; // Importado auth para checar o usuário
+import { db, auth } from '../firebaseConfig'; 
 import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore'; 
 
-// ⚠️ CHAVE DE API PARA GEOCODIFICAÇÃO E ROTAS
-// Substitua o placeholder pela sua CHAVE DE API REAL do Google Maps.
-const GOOGLE_MAPS_API_KEY = "AIzaSyDJhg6HK-fVaB1v_QJa27jQvWgjSAqJ8Og"; 
+// 🚨 REMOVIDO: A leitura da chave global foi removida daqui.
 
-// Função utilitária para decodificar a polilinha 
+// Função utilitária para decodificar a polilinha (Mantida)
 const decodePolyline = (t) => { 
     let index = 0, lat = 0, lng = 0, coordinates = [];
     while (index < t.length) {
@@ -56,12 +55,15 @@ const MainScreen = ({ navigation }) => {
   const [userLocation, setUserLocation] = useState(null); 
   const [selectedPoint, setSelectedPoint] = useState(null); 
   const [routeCoordinates, setRouteCoordinates] = useState([]);
-  const [isAdmin, setIsAdmin] = useState(false); // NOVO ESTADO ADMIN
+  const [isAdmin, setIsAdmin] = useState(false); // ESTADO ADMIN
+  
+  // 🚨 NOVO: Obtém a chave de API de forma resiliente
+  const GOOGLE_MAPS_API_KEY = Constants.manifest?.extra?.GOOGLE_MAPS_API_KEY; 
 
 
   // --- FUNÇÕES DE ADMIN E LÓGICA DE MAPA ---
 
-  // NOVO: Checa se o usuário logado é administrador
+  // Checa se o usuário logado é administrador
   const checkAdminStatus = async (user) => {
     if (!user) return false;
     try {
@@ -153,7 +155,6 @@ const MainScreen = ({ navigation }) => {
         }
 
         const userRegion = await getLocationRegion();
-        // A busca dos pontos e definição final da região ocorre em fetchPoints
         const unsubscribe = fetchPoints(userRegion); 
         return unsubscribe;
     };
@@ -168,14 +169,15 @@ const MainScreen = ({ navigation }) => {
   // --- FUNÇÕES DE ROTA E NAVEGAÇÃO ---
 
   const getRoute = async (origin, destination) => {
-    if (GOOGLE_MAPS_API_KEY === "SUA_CHAVE_DE_API_REAL_AQUI") {
-        Alert.alert("Erro de API", "Substitua a chave de API para traçar a rota.");
+    if (!GOOGLE_MAPS_API_KEY) {
+        Alert.alert("Erro de API", "Chave do Google Maps não carregada. Verifique .env e app.json.");
         return null;
     }
 
     const originStr = `${origin.latitude},${origin.longitude}`;
     const destinationStr = `${destination.latitude},${destination.longitude}`;
 
+    // A chave é usada aqui na URL
     const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${originStr}&destination=${destinationStr}&key=${GOOGLE_MAPS_API_KEY}`;
     
     try {

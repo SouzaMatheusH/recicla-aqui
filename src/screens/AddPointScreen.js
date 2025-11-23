@@ -14,9 +14,13 @@ import {
 import { db, auth } from '../firebaseConfig';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore'; 
 import * as Location from 'expo-location'; 
+import Constants from 'expo-constants'; // Importa Constants
 
-// ⚠️ CHAVE DE API PARA GEOCODIFICAÇÃO E ROTAS
-const GOOGLE_MAPS_API_KEY = "AIzaSyDJhg6HK-fVaB1v_QJa27jQvWgjSAqJ8Og"; 
+// Função para ler a chave de forma segura
+const getMapsApiKey = () => {
+  // Acesso defensivo ao manifest.extra
+  return Constants.manifest?.extra?.GOOGLE_MAPS_API_KEY || ''; 
+};
 
 // Tipos de resíduos que o ponto pode aceitar (com chave e label)
 const WASTE_TYPES = [
@@ -60,22 +64,22 @@ const AddPointScreen = ({ navigation }) => {
     checkAdminStatus();
   }, []);
   
-  // --- Lógica de Geocodificação ---
+  // --- Lógica de Geocodificação (USANDO CHAVE DE FORMA RESILIENTE) ---
   const geocodeAddress = async (addr) => {
-    if (GOOGLE_MAPS_API_KEY === "YOUR_GOOGLE_MAPS_API_KEY_HERE") {
-        Alert.alert("Erro de API", "Substitua a chave de API.");
+    const apiKey = getMapsApiKey(); // Acesso resiliente
+    
+    if (!apiKey) {
+        Alert.alert("Erro de API", "Chave do Google Maps não carregada. Verifique seu .env e app.json.");
         return null;
     }
     
     const encodedAddress = encodeURIComponent(addr);
-    // Adicionado o parâmetro 'region=br' para ajudar a localizar endereços brasileiros
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&region=br&key=${GOOGLE_MAPS_API_KEY}`;
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&region=br&key=${apiKey}`;
     
     try {
         const response = await fetch(url);
         const json = await response.json();
         
-        // Log de depuração
         console.log("Resposta da Geocodificação (Status):", json.status);
         if (json.error_message) {
              console.error("Mensagem de Erro da API:", json.error_message);
@@ -89,7 +93,7 @@ const AddPointScreen = ({ navigation }) => {
             };
         } else if (json.status === "REQUEST_DENIED") {
              // Tratamento específico para REQUEST_DENIED
-             Alert.alert("Erro de Chave / API", "A requisição de Geocodificação foi negada. Verifique se a 'Geocoding API' está habilitada, se o faturamento está ativo e se não há restrições de chave (referrer).");
+             Alert.alert("Erro de Chave / API", "A requisição de Geocodificação foi negada. Verifique as configurações de faturamento e restrições da chave.");
              return null;
         } else {
             Alert.alert(
@@ -169,7 +173,7 @@ const AddPointScreen = ({ navigation }) => {
     
     if (!finalCoords) {
         setLoading(false);
-        return; // Geocodificação falhou e o alerta já foi exibido
+        return; 
     }
 
     try {
@@ -187,11 +191,9 @@ const AddPointScreen = ({ navigation }) => {
       
       // CHECAGEM DE ADMIN: Se for admin, salva direto. Se não, salva na fila de moderação.
       if (isAdmin) {
-          // ADMIN: Salva direto na coleção de pontos ativos
           await addDoc(collection(db, "points"), pointData);
           Alert.alert("Sucesso (Admin)", "Ponto adicionado diretamente ao mapa.");
       } else {
-          // USUÁRIO COMUM: Salva na coleção de pendências
           await addDoc(collection(db, "pending_points"), {
               ...pointData,
               status: 'pending',

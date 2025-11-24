@@ -8,45 +8,55 @@ import {
   FlatList,
   TouchableOpacity,
   Linking,
+  Image,
 } from 'react-native';
 
 // Importações Essenciais para o Mapa e Localização
 import MapView, { Marker, Polyline } from 'react-native-maps'; 
 import * as Location from 'expo-location'; 
+// Importa Constants para acessar as chaves injetadas do ambiente
+import Constants from 'expo-constants'; 
 
 // Importações do Firebase
-import { db, auth } from '../firebaseConfig'; // Importado auth para checar o usuário
-import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore'; 
+import { db, auth } from '../firebaseConfig'; 
+import { collection, onSnapshot, doc, getDoc, serverTimestamp } from 'firebase/firestore'; 
 
-// ⚠️ CHAVE DE API PARA GEOCODIFICAÇÃO E ROTAS
-// Substitua o placeholder pela sua CHAVE DE API REAL do Google Maps.
-const GOOGLE_MAPS_API_KEY = "AIzaSyDJhg6HK-fVaB1v_QJa27jQvWgjSAqJ8Og"; 
+// --- FUNÇÕES AUXILIARES ---
 
-// Função utilitária para decodificar a polilinha 
+// Função utilitária para decodificar a polilinha (Do Google Directions API)
 const decodePolyline = (t) => { 
-    let index = 0, lat = 0, lng = 0, coordinates = [];
-    while (index < t.length) {
-        let b, shift = 0, result = 0;
-        do {
-            b = t.charCodeAt(index++) - 63;
-            result |= (b & 0x1f) << shift;
-            shift += 5;
-        } while (b >= 0x20);
-        let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
-        lat += dlat;
-        shift = 0;
-        result = 0;
-        do {
-            b = t.charCodeAt(index++) - 63;
-            result |= (b & 0x1f) << shift;
-            shift += 5;
-        } while (b >= 0x20);
-        let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
-        lng += dlng;
-        coordinates.push({ latitude: (lat / 1e5), longitude: (lng / 1e5) });
-    }
-    return coordinates;
+  let index = 0, lat = 0, lng = 0, coordinates = [];
+  while (index < t.length) {
+      let b, shift = 0, result = 0;
+      do {
+          b = t.charCodeAt(index++) - 63;
+          result |= (b & 0x1f) << shift;
+          shift += 5;
+      } while (b >= 0x20);
+      let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+      lat += dlat;
+      shift = 0;
+      result = 0;
+      do {
+          b = t.charCodeAt(index++) - 63;
+          result |= (b & 0x1f) << shift;
+          shift += 5;
+      } while (b >= 0x20);
+      let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+      lng += dlng;
+      coordinates.push({ latitude: (lat / 1e5), longitude: (lng / 1e5) });
+  }
+  return coordinates;
 };
+
+// 🚨 NOVO: Função utilitária para ler a chave de API de forma segura
+const getMapsApiKey = () => {
+    // Usa uma lógica resiliente para tentar acessar a chave de diferentes locais
+    // (expoConfig é preferível em SDKs mais novos, manifest em mais antigos)
+    return Constants.expoConfig?.extra?.GOOGLE_MAPS_API_KEY || Constants.manifest?.extra?.GOOGLE_MAPS_API_KEY || ''; 
+};
+
+const GOOGLE_MAPS_API_KEY = getMapsApiKey(); // 👈 Lendo a chave de forma segura
 
 
 const MainScreen = ({ navigation }) => {
@@ -56,17 +66,17 @@ const MainScreen = ({ navigation }) => {
   const [userLocation, setUserLocation] = useState(null); 
   const [selectedPoint, setSelectedPoint] = useState(null); 
   const [routeCoordinates, setRouteCoordinates] = useState([]);
-  const [isAdmin, setIsAdmin] = useState(false); // NOVO ESTADO ADMIN
+  const [isAdmin, setIsAdmin] = useState(false); 
 
+  // --- FUNÇÕES DE LÓGICA DE MAPA ---
 
-  // --- FUNÇÕES DE ADMIN E LÓGICA DE MAPA ---
-
-  // NOVO: Checa se o usuário logado é administrador
+  // Checa se o usuário logado é administrador
   const checkAdminStatus = async (user) => {
     if (!user) return false;
     try {
         const userDocRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userDocRef);
+        // A chave 'isAdmin' deve estar presente e ser true no Firestore
         return userDoc.exists() && userDoc.data().isAdmin === true;
     } catch (error) {
         console.error("Erro ao checar status de admin:", error);
@@ -76,7 +86,7 @@ const MainScreen = ({ navigation }) => {
 
   const calculatePointsCenter = (pointsArray) => {
     if (pointsArray.length === 0) {
-        return { latitude: -23.5505, longitude: -46.6333 };
+        return { latitude: -23.5505, longitude: -46.6333 }; // Default São Paulo
     }
     const avgLat = pointsArray.reduce((sum, p) => sum + p.latitude, 0) / pointsArray.length;
     const avgLon = pointsArray.reduce((sum, p) => sum + p.longitude, 0) / pointsArray.length;
@@ -146,6 +156,7 @@ const MainScreen = ({ navigation }) => {
 
   useEffect(() => {
     const initializeMapAndPoints = async () => {
+        // Checa a autenticação para permissão de Admin
         const user = auth.currentUser;
         if (user) {
             const admin = await checkAdminStatus(user);
@@ -153,7 +164,6 @@ const MainScreen = ({ navigation }) => {
         }
 
         const userRegion = await getLocationRegion();
-        // A busca dos pontos e definição final da região ocorre em fetchPoints
         const unsubscribe = fetchPoints(userRegion); 
         return unsubscribe;
     };
@@ -168,14 +178,16 @@ const MainScreen = ({ navigation }) => {
   // --- FUNÇÕES DE ROTA E NAVEGAÇÃO ---
 
   const getRoute = async (origin, destination) => {
-    if (GOOGLE_MAPS_API_KEY === "SUA_CHAVE_DE_API_REAL_AQUI") {
-        Alert.alert("Erro de API", "Substitua a chave de API para traçar a rota.");
+    // 🚨 Verifica se a chave de API foi carregada (retorna undefined se não houver)
+    if (!GOOGLE_MAPS_API_KEY) {
+        Alert.alert("Erro de API", "Chave do Google Maps não carregada. Verifique .env e app.config.js.");
         return null;
     }
 
     const originStr = `${origin.latitude},${origin.longitude}`;
     const destinationStr = `${destination.latitude},${destination.longitude}`;
 
+    // A chave é usada aqui na URL, lida da constante que está sendo populada de forma segura
     const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${originStr}&destination=${destinationStr}&key=${GOOGLE_MAPS_API_KEY}`;
     
     try {
@@ -186,6 +198,7 @@ const MainScreen = ({ navigation }) => {
             const encodedPolyline = json.routes[0].overview_polyline.points;
             return decodePolyline(encodedPolyline);
         } else if (json.status === "REQUEST_DENIED") {
+            // Este alerta aponta para o problema de permissão no Google Cloud.
             Alert.alert("Erro de API", `A requisição foi negada. Verifique suas permissões no Google Cloud.`);
             return null;
         } else {
@@ -215,7 +228,7 @@ const MainScreen = ({ navigation }) => {
         
         // Ajusta o zoom do mapa para a rota
         const latitudes = routeCoords.map(coord => coord.latitude);
-        const longitudes = routeCoords.map(coord => coord.longitude);
+        const longitudes = routeCoordinates.map(coord => coord.longitude);
 
         const minLat = Math.min(...latitudes);
         const maxLat = Math.max(...latitudes);

@@ -39,7 +39,7 @@ macOS
 local env files
 
 .env*.local
-.env # Adicionado para ocultar o arquivo de variáveis de ambiente
+.env
 
 typescript
 

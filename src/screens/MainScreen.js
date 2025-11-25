@@ -23,6 +23,35 @@ import { collection, onSnapshot, doc, getDoc, serverTimestamp } from 'firebase/f
 
 // --- FUNÇÕES AUXILIARES ---
 
+// 📐 NOVO: Função para calcular a distância Haversine em Km
+const haversineDistance = (coords1, coords2) => {
+    // Raio da Terra em quilômetros
+    const R = 6371; 
+    
+    // Converte graus para radianos
+    const toRad = (x) => (x * Math.PI) / 180;
+    
+    const lat1 = coords1.latitude;
+    const lon1 = coords1.longitude;
+    const lat2 = coords2.latitude;
+    const lon2 = coords2.longitude;
+    
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    
+    const a = 
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    
+    // Distância em km, arredondada para 1 casa decimal
+    const distance = R * c; 
+    
+    return distance.toFixed(1);
+};
+
 // Função utilitária para decodificar a polilinha (Do Google Directions API)
 const decodePolyline = (t) => { 
   let index = 0, lat = 0, lng = 0, coordinates = [];
@@ -49,14 +78,12 @@ const decodePolyline = (t) => {
   return coordinates;
 };
 
-// 🚨 NOVO: Função utilitária para ler a chave de API de forma segura
+// 🔑 FUNÇÃO DE ACESSO RESILIENTE: Não deve ser executada no top-level.
 const getMapsApiKey = () => {
-    // Usa uma lógica resiliente para tentar acessar a chave de diferentes locais
-    // (expoConfig é preferível em SDKs mais novos, manifest em mais antigos)
-    return Constants.expoConfig?.extra?.GOOGLE_MAPS_API_KEY || Constants.manifest?.extra?.GOOGLE_MAPS_API_KEY || ''; 
+    // Tenta expoConfig (estrutura moderna) e faz fallback para manifest (compatibilidade)
+    const extra = Constants.expoConfig?.extra || Constants.manifest?.extra; 
+    return extra?.GOOGLE_MAPS_API_KEY || ''; 
 };
-
-const GOOGLE_MAPS_API_KEY = getMapsApiKey(); // 👈 Lendo a chave de forma segura
 
 
 const MainScreen = ({ navigation }) => {
@@ -178,7 +205,10 @@ const MainScreen = ({ navigation }) => {
   // --- FUNÇÕES DE ROTA E NAVEGAÇÃO ---
 
   const getRoute = async (origin, destination) => {
-    // 🚨 Verifica se a chave de API foi carregada (retorna undefined se não houver)
+    // CHAVE DE API OBTIDA AQUI (dentro da função), EVITANDO CRASH NO BOOT
+    const GOOGLE_MAPS_API_KEY = getMapsApiKey(); 
+
+    // Verifica se a chave de API foi carregada (retorna undefined se não houver)
     if (!GOOGLE_MAPS_API_KEY) {
         Alert.alert("Erro de API", "Chave do Google Maps não carregada. Verifique .env e app.config.js.");
         return null;
@@ -281,7 +311,6 @@ const MainScreen = ({ navigation }) => {
     navigation.navigate('Admin');
   };
 
-
   // --- COMPONENTES DE RENDERIZAÇÃO ---
 
   if (loading || !initialRegion) {
@@ -294,35 +323,54 @@ const MainScreen = ({ navigation }) => {
   }
 
   // Componente de item da lista
-  const renderItem = ({ item }) => (
-    <TouchableOpacity 
-        style={[
-            styles.listItem, 
-            selectedPoint && selectedPoint.id === item.id && styles.listItemActive 
-        ]}
-        onPress={() => handleSelectPoint(item)} 
-        disabled={!userLocation}
-    >
-      <View>
-        <Text style={styles.pointName}>{item.name || "Ponto de Coleta"}</Text>
-        <Text style={styles.pointAddress}>{item.address || "Endereço não informado"}</Text>
-        {item.wasteTypes && Array.isArray(item.wasteTypes) && (
-           <Text style={styles.wasteTypesText}>Tipos: {item.wasteTypes.join(', ')}</Text>
-        )}
-        <Text style={styles.pointDistance}>Horário: {item.workingHours || "Não informado"}</Text>
-        
-        {/* Renderiza o botão de INICIAR NAVEGAÇÃO APENAS se este for o item selecionado */}
-        {selectedPoint && selectedPoint.id === item.id && (
-            <TouchableOpacity 
-                style={styles.startNavigationButton} 
-                onPress={handleStartNavigation}
-            >
-                <Text style={styles.startNavigationButtonText}>Iniciar Navegação no Maps</Text>
-            </TouchableOpacity>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+  const renderItem = ({ item }) => {
+    // 1. Calcula a distância (usa as coordenadas do item e do usuário)
+    const distance = userLocation 
+      ? haversineDistance(userLocation, { latitude: item.latitude, longitude: item.longitude })
+      : null;
+    
+    // 2. Define o texto de exibição
+    const distanceText = distance 
+      ? `${distance} km` 
+      : 'Localização Desconhecida';
+
+    const isItemSelected = selectedPoint && selectedPoint.id === item.id;
+
+    return (
+      <TouchableOpacity 
+          style={[
+              styles.listItem, 
+              isItemSelected && styles.listItemActive 
+          ]}
+          onPress={() => handleSelectPoint(item)} 
+          disabled={!userLocation}
+      >
+        <View>
+          <Text style={styles.pointName}>{item.name || "Ponto de Coleta"}</Text>
+          <Text style={styles.pointAddress}>{item.address || "Endereço não informado"}</Text>
+          
+          {item.wasteTypes && Array.isArray(item.wasteTypes) && (
+             <Text style={styles.wasteTypesText}>Tipos: {item.wasteTypes.join(', ')}</Text>
+          )}
+
+          {/* 📍 NOVO: Indicador de Distância */}
+          <Text style={styles.distanceIndicator}>Distância: {distanceText}</Text>
+          
+          <Text style={styles.pointDistance}>Horário: {item.workingHours || "Não informado"}</Text>
+          
+          {/* Renderiza o botão de INICIAR NAVEGAÇÃO APENAS se este for o item selecionado */}
+          {isItemSelected && (
+              <TouchableOpacity 
+                  style={styles.startNavigationButton} 
+                  onPress={handleStartNavigation}
+              >
+                  <Text style={styles.startNavigationButtonText}>Iniciar Navegação no Maps</Text>
+              </TouchableOpacity>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
 
   return (
@@ -335,20 +383,34 @@ const MainScreen = ({ navigation }) => {
           showsUserLocation={true}
           loadingEnabled={true}
         >
-            {/* Mapeia os pontos de coleta */}
-            {points.map(point => (
-                <Marker
-                    key={point.id}
+            {/* CORREÇÃO APLICADA: Renderiza apenas o ponto selecionado ou todos os pontos */}
+            {selectedPoint
+                ? // Se houver um ponto selecionado, renderiza APENAS ele
+                  <Marker
+                    key={selectedPoint.id}
                     coordinate={{ 
-                        latitude: point.latitude, 
-                        longitude: point.longitude 
+                        latitude: selectedPoint.latitude, 
+                        longitude: selectedPoint.longitude 
                     }}
-                    title={point.name}
-                    description={point.address}
-                    pinColor={selectedPoint && selectedPoint.id === point.id ? '#FF0000' : '#00A86B'} // Vermelho se selecionado
-                />
-            ))}
-
+                    title={selectedPoint.name}
+                    description={selectedPoint.address}
+                    pinColor={'#FF0000'} // Vermelho para destacar
+                  />
+                : // Caso contrário, renderiza todos os pontos
+                points.map(point => (
+                    <Marker
+                        key={point.id}
+                        coordinate={{ 
+                            latitude: point.latitude, 
+                            longitude: point.longitude 
+                        }}
+                        title={point.name}
+                        description={point.address}
+                        pinColor={'#00A86B'} // Cor padrão
+                    />
+                ))
+            }
+            
             {/* Desenha a ROTA (Polyline) se houver coordenadas */}
             {routeCoordinates && routeCoordinates.length > 0 && (
                 <Polyline
@@ -360,12 +422,18 @@ const MainScreen = ({ navigation }) => {
         </MapView>
         {/* Mensagem informativa no mapa */}
         <View style={styles.mapInfoBox}>
-            <Text style={styles.infoText}>Toque em um ponto da lista para traçar a rota</Text>
+            <Text style={styles.infoText}>
+                {selectedPoint 
+                    ? `Ponto Selecionado: ${selectedPoint.name}` 
+                    : "Toque em um ponto da lista para traçar a rota"
+                }
+            </Text>
         </View>
       </View>
       
       {/* 2. LISTA DE LOCALIZAÇÕES (2/3 da tela) */}
       <View style={styles.listContainer}>
+        {/* TÍTULO CORRIGIDO: Sempre mostra a contagem total de pontos */}
         <Text style={styles.listTitle}>Pontos de Coleta Próximos ({points.length} encontrados)</Text>
         
         <View style={styles.buttonRow}>
@@ -376,21 +444,35 @@ const MainScreen = ({ navigation }) => {
                 </TouchableOpacity>
             )}
 
-            {/* BOTÃO INDICAR PONTO (Aparece para todos) */}
-            <TouchableOpacity style={styles.indicateButton} onPress={handleIndicarPonto}>
-                <Text style={styles.indicateButtonText}>Indique um Ponto de Coleta</Text>
-            </TouchableOpacity>
+            {/* LÓGICA DO BOTÃO: Limpar Seleção vs. Indicar Ponto */}
+            {selectedPoint ? (
+                 <TouchableOpacity 
+                    style={[styles.indicateButton, styles.clearSelectionButton]} 
+                    onPress={() => {
+                        setSelectedPoint(null); // Limpa a seleção
+                        setRouteCoordinates([]); // Remove a rota
+                    }}
+                >
+                    <Text style={styles.indicateButtonText}>Limpar Seleção</Text>
+                </TouchableOpacity>
+            ) : (
+                <TouchableOpacity style={styles.indicateButton} onPress={handleIndicarPonto}>
+                    <Text style={styles.indicateButtonText}>Indique um Ponto de Coleta</Text>
+                </TouchableOpacity>
+            )}
         </View>
         
         {
             !userLocation && (
                 <View style={styles.warningBox}>
-                    <Text style={styles.warningText}>⚠️ Permissão de localização não concedida. Não é possível traçar rotas.</Text>
+                    <Text style={styles.warningText}>⚠️ Permissão de localização não concedida. Não é possível traçar rotas. Recarregue o app para tentar novamente.</Text>
                 </View>
             )
         }
+
+        {/* A lista (FlatList) SEMPRE renderiza a lista COMPLETA de pontos */}
         <FlatList
-          data={points}
+          data={points} 
           renderItem={renderItem}
           keyExtractor={item => item.id}
           ListEmptyComponent={() => (
@@ -495,6 +577,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
+  clearSelectionButton: { // Novo estilo para diferenciar o botão de limpar
+    backgroundColor: '#666',
+  },
   warningBox: {
       backgroundColor: '#FFFBEA', 
       padding: 10,
@@ -540,6 +625,14 @@ const styles = StyleSheet.create({
     color: '#007AFF', 
     fontWeight: '600',
     marginTop: 5,
+  },
+  // 📍 NOVO ESTILO para o indicador de Distância
+  distanceIndicator: { 
+    fontSize: 14,
+    color: '#1E1E1E',
+    fontWeight: 'bold',
+    marginTop: 5,
+    marginBottom: 5, // Adiciona um pequeno espaço
   },
   pointDistance: { 
     fontSize: 12,

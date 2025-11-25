@@ -16,10 +16,13 @@ import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/fires
 import * as Location from 'expo-location'; 
 import Constants from 'expo-constants'; // Importa Constants
 
-// Função para ler a chave de forma segura
+// 🔑 FUNÇÃO DE ACESSO RESILIENTE: O acesso aos extras é feito de forma segura.
 const getMapsApiKey = () => {
-  // Acesso defensivo ao manifest.extra
-  return Constants.manifest?.extra?.GOOGLE_MAPS_API_KEY || ''; 
+  // Tenta Constants.expoConfig.extra (estrutura moderna) e faz fallback para 
+  // Constants.manifest.extra (compatibilidade), garantindo que o app não quebre 
+  // em diferentes ambientes Expo.
+  const extra = Constants.expoConfig?.extra || Constants.manifest?.extra; 
+  return extra?.GOOGLE_MAPS_API_KEY || ''; 
 };
 
 // Tipos de resíduos que o ponto pode aceitar (com chave e label)
@@ -66,7 +69,8 @@ const AddPointScreen = ({ navigation }) => {
   
   // --- Lógica de Geocodificação (USANDO CHAVE DE FORMA RESILIENTE) ---
   const geocodeAddress = async (addr) => {
-    const apiKey = getMapsApiKey(); // Acesso resiliente
+    // 🚨 Acesso à chave de API MOVIDO para dentro do escopo da função
+    const apiKey = getMapsApiKey(); 
     
     if (!apiKey) {
         Alert.alert("Erro de API", "Chave do Google Maps não carregada. Verifique seu .env e app.json.");
